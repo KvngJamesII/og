@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-Tenant OTP Bot Manager</title>
+    <title>OTP Bot Manager - Professional Panel</title>
     <style>
         * {
             margin: 0;
@@ -11,193 +11,420 @@
             box-sizing: border-box;
         }
 
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1e40af;
+            --secondary: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --dark: #1e293b;
+            --gray: #64748b;
+            --light-gray: #f1f5f9;
+            --border: #e2e8f0;
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f8fafc;
+            color: var(--dark);
+            line-height: 1.6;
+        }
+
+        /* Auth Pages */
+        .auth-container {
             min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             padding: 20px;
+        }
+
+        .auth-box {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 48px;
+            width: 100%;
+            max-width: 440px;
+        }
+
+        .auth-logo {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .auth-logo h1 {
+            font-size: 28px;
+            color: var(--dark);
+            margin-bottom: 8px;
+        }
+
+        .auth-logo p {
+            color: var(--gray);
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.3s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .auth-switch {
+            text-align: center;
+            margin-top: 24px;
+            color: var(--gray);
+            font-size: 14px;
+        }
+
+        .auth-switch a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .alert-warning {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fde68a;
+        }
+
+        /* Dashboard */
+        .dashboard {
+            display: none;
+        }
+
+        .header {
+            background: white;
+            border-bottom: 1px solid var(--border);
+            padding: 16px 0;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-left h1 {
+            font-size: 24px;
+            color: var(--dark);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .credits-badge {
+            background: var(--light-gray);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            color: var(--dark);
+            font-size: 14px;
+        }
+
+        .credits-badge span {
+            color: var(--primary);
+            font-size: 16px;
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        .btn-logout {
+            padding: 8px 16px;
+            background: var(--danger);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
         }
 
         .container {
             max-width: 1400px;
             margin: 0 auto;
+            padding: 32px 24px;
         }
 
-        .header {
+        .pending-approval {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: 2px solid #fbbf24;
+            border-radius: 12px;
+            padding: 24px;
             text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .pending-approval h2 {
+            color: #92400e;
+            margin-bottom: 8px;
+        }
+
+        .pending-approval p {
+            color: #78350f;
+        }
+
+        .dashboard-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .btn-add-bot {
+            padding: 12px 24px;
+            background: var(--primary);
             color: white;
-            margin-bottom: 30px;
-        }
-
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-        }
-
-        .header p {
-            font-size: 1.1rem;
-            opacity: 0.9;
-        }
-
-        .add-bot-btn {
-            background: white;
-            color: #667eea;
             border: none;
-            padding: 15px 40px;
-            font-size: 1.1rem;
-            font-weight: bold;
-            border-radius: 50px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            transition: all 0.3s;
-            margin: 20px auto;
-            display: block;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        .add-bot-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        .btn-add-bot:hover {
+            background: var(--primary-dark);
         }
 
         .bots-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 20px;
-            margin-top: 30px;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 24px;
         }
 
         .bot-card {
             background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            overflow: hidden;
             transition: all 0.3s;
         }
 
         .bot-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 6px 25px rgba(0,0,0,0.15);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+            transform: translateY(-2px);
         }
 
-        .bot-header {
+        .bot-card-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #f0f0f0;
         }
 
         .bot-name {
-            font-size: 1.3rem;
-            font-weight: bold;
-            color: #333;
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--dark);
         }
 
         .status-badge {
-            padding: 5px 15px;
+            padding: 6px 12px;
             border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: bold;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
         }
 
         .status-running {
-            background: #d4edda;
-            color: #155724;
+            background: #d1fae5;
+            color: #065f46;
         }
 
         .status-stopped {
-            background: #f8d7da;
-            color: #721c24;
+            background: #fee2e2;
+            color: #991b1b;
         }
 
-        .bot-info {
-            margin: 15px 0;
+        .status-deploying {
+            background: #dbeafe;
+            color: #1e40af;
         }
 
-        .info-row {
+        .bot-card-body {
+            padding: 20px;
+        }
+
+        .bot-info-row {
             display: flex;
             justify-content: space-between;
-            padding: 8px 0;
-            font-size: 0.95rem;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--light-gray);
+            font-size: 14px;
+        }
+
+        .bot-info-row:last-child {
+            border-bottom: none;
         }
 
         .info-label {
-            color: #666;
+            color: var(--gray);
             font-weight: 500;
         }
 
         .info-value {
-            color: #333;
+            color: var(--dark);
             font-weight: 600;
         }
 
-        .channels-list {
-            margin: 10px 0;
+        .bot-console {
+            background: #1e293b;
+            color: #94a3b8;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin: 16px 0;
         }
 
-        .channel-tag {
-            display: inline-block;
-            background: #e9ecef;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 0.85rem;
-            margin: 3px;
-            color: #495057;
+        .console-line {
+            margin-bottom: 4px;
+            line-height: 1.5;
         }
+
+        .console-info { color: #60a5fa; }
+        .console-success { color: #34d399; }
+        .console-error { color: #f87171; }
+        .console-warning { color: #fbbf24; }
 
         .bot-actions {
             display: flex;
-            gap: 10px;
-            margin-top: 20px;
+            gap: 8px;
+            padding: 16px 20px;
+            background: var(--light-gray);
         }
 
-        .btn {
+        .btn-action {
             flex: 1;
             padding: 10px;
             border: none;
-            border-radius: 8px;
-            font-weight: bold;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
-            font-size: 0.95rem;
         }
 
         .btn-start {
-            background: #28a745;
+            background: var(--secondary);
             color: white;
-        }
-
-        .btn-start:hover {
-            background: #218838;
         }
 
         .btn-stop {
-            background: #dc3545;
+            background: var(--danger);
             color: white;
-        }
-
-        .btn-stop:hover {
-            background: #c82333;
-        }
-
-        .btn-logs {
-            background: #17a2b8;
-            color: white;
-        }
-
-        .btn-logs:hover {
-            background: #138496;
         }
 
         .btn-delete {
-            background: #6c757d;
+            background: var(--gray);
             color: white;
         }
 
-        .btn-delete:hover {
-            background: #5a6268;
+        .spinner {
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .modal {
@@ -210,206 +437,298 @@
             background: rgba(0,0,0,0.5);
             z-index: 1000;
             overflow-y: auto;
+            padding: 40px 20px;
         }
 
         .modal-content {
             background: white;
             max-width: 600px;
-            margin: 50px auto;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            margin: 0 auto;
+            border-radius: 16px;
+            padding: 32px;
         }
 
         .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 25px;
+            margin-bottom: 24px;
         }
 
         .modal-title {
-            font-size: 1.8rem;
-            color: #333;
-        }
-
-        .close-btn {
-            font-size: 2rem;
-            cursor: pointer;
-            color: #999;
-            background: none;
-            border: none;
-        }
-
-        .close-btn:hover {
-            color: #333;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #333;
-        }
-
-        .form-input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 1rem;
-            transition: border 0.3s;
-        }
-
-        .form-input:focus {
-            outline: none;
-            border-color: #667eea;
+            font-size: 24px;
+            color: var(--dark);
         }
 
         .channel-inputs {
-            margin-top: 10px;
+            margin-top: 12px;
         }
 
         .channel-input-group {
             display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
+            gap: 8px;
+            margin-bottom: 8px;
         }
 
-        .add-channel-btn {
-            background: #667eea;
+        .btn-add-channel {
+            background: var(--secondary);
             color: white;
+            padding: 8px 16px;
             border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
             cursor: pointer;
-            font-weight: bold;
-            margin-top: 10px;
+            margin-top: 8px;
         }
 
-        .remove-channel-btn {
-            background: #dc3545;
+        .btn-remove {
+            background: var(--danger);
             color: white;
+            padding: 10px 16px;
             border: none;
-            padding: 10px 15px;
-            border-radius: 8px;
+            border-radius: 6px;
             cursor: pointer;
         }
 
         .form-actions {
             display: flex;
-            gap: 15px;
-            margin-top: 30px;
-        }
-
-        .btn-primary {
-            flex: 1;
-            background: #667eea;
-            color: white;
-            padding: 15px;
-            border: none;
-            border-radius: 8px;
-            font-size: 1.1rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .btn-primary:hover {
-            background: #5568d3;
+            gap: 12px;
+            margin-top: 24px;
         }
 
         .btn-secondary {
             flex: 1;
-            background: #6c757d;
+            padding: 14px;
+            background: var(--gray);
             color: white;
-            padding: 15px;
             border: none;
             border-radius: 8px;
-            font-size: 1.1rem;
-            font-weight: bold;
+            font-size: 15px;
+            font-weight: 600;
             cursor: pointer;
         }
 
         .empty-state {
             text-align: center;
-            color: white;
             padding: 60px 20px;
+            color: var(--gray);
         }
 
         .empty-state h2 {
-            font-size: 2rem;
-            margin-bottom: 15px;
+            font-size: 24px;
+            margin-bottom: 12px;
+            color: var(--dark);
         }
 
-        .empty-state p {
-            font-size: 1.2rem;
-            opacity: 0.9;
+        /* Admin Panel */
+        .admin-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
         }
 
-        .loading {
-            text-align: center;
-            color: white;
-            font-size: 1.2rem;
-            padding: 40px;
-        }
-
-        .logs-content {
-            max-height: 400px;
-            overflow-y: auto;
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 0.9rem;
-        }
-
-        .log-entry {
-            padding: 8px;
-            margin-bottom: 5px;
-            border-left: 3px solid #667eea;
+        .stat-card {
             background: white;
-            border-radius: 4px;
+            padding: 24px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
         }
 
-        .log-error {
-            border-left-color: #dc3545;
+        .stat-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 8px;
         }
 
-        .log-warning {
-            border-left-color: #ffc107;
+        .stat-label {
+            color: var(--gray);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .users-table {
+            background: white;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .table-header {
+            background: var(--light-gray);
+            padding: 16px 20px;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 16px 20px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            font-weight: 600;
+            color: var(--gray);
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 13px;
+            border-radius: 6px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 8px;
+        }
+
+        .btn-approve {
+            background: var(--secondary);
+            color: white;
+        }
+
+        .btn-gift {
+            background: var(--primary);
+            color: white;
         }
 
         @media (max-width: 768px) {
             .bots-grid {
                 grid-template-columns: 1fr;
             }
-
-            .header h1 {
-                font-size: 1.8rem;
+            
+            .auth-box {
+                padding: 32px 24px;
             }
 
-            .modal-content {
-                margin: 20px;
-                padding: 20px;
+            .admin-stats {
+                grid-template-columns: 1fr;
             }
         }
     </style>
 </head>
 <body>
-    <div class="container">
+    <!-- Login Page -->
+    <div id="loginPage" class="auth-container">
+        <div class="auth-box">
+            <div class="auth-logo">
+                <h1>🤖 OTP Bot Manager</h1>
+                <p>Professional Panel</p>
+            </div>
+            <div id="loginAlert"></div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-input" id="loginUsername" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" id="loginPassword" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Sign In</button>
+            </form>
+            <div class="auth-switch">
+                Don't have an account? <a href="#" onclick="showSignup()">Sign up</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Signup Page -->
+    <div id="signupPage" class="auth-container" style="display: none;">
+        <div class="auth-box">
+            <div class="auth-logo">
+                <h1>🤖 OTP Bot Manager</h1>
+                <p>Create Your Account</p>
+            </div>
+            <div id="signupAlert"></div>
+            <form id="signupForm">
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-input" id="signupUsername" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" id="signupPassword" required minlength="6">
+                </div>
+                <button type="submit" class="btn btn-primary">Create Account</button>
+            </form>
+            <div class="auth-switch">
+                Already have an account? <a href="#" onclick="showLogin()">Sign in</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Dashboard -->
+    <div id="userDashboard" class="dashboard">
         <div class="header">
-            <h1>🤖 Multi-Tenant OTP Bot Manager</h1>
-            <p>Manage multiple OTP bots for different users</p>
-            <button class="add-bot-btn" onclick="openAddBotModal()">➕ Add OTP Bot</button>
+            <div class="header-content">
+                <div class="header-left">
+                    <h1>OTP Bot Manager</h1>
+                </div>
+                <div class="header-right">
+                    <div class="credits-badge">
+                        Credits: <span id="userCredits">0</span>C
+                    </div>
+                    <div class="user-menu">
+                        <div class="user-avatar" id="userAvatar">U</div>
+                        <button class="btn-logout" onclick="logout()">Logout</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div id="botsContainer">
-            <div class="loading">Loading bots...</div>
+        <div class="container">
+            <div id="pendingApprovalNotice" style="display: none;">
+                <div class="pending-approval">
+                    <h2>⏳ Account Pending Approval</h2>
+                    <p>The admin is reviewing your account. Once approved, you'll receive 100 credits and can start creating bots!</p>
+                </div>
+            </div>
+
+            <div id="approvedContent" style="display: none;">
+                <div class="dashboard-actions">
+                    <h2>My Bots</h2>
+                    <button class="btn-add-bot" onclick="openAddBotModal()">
+                        ➕ Add New Bot
+                    </button>
+                </div>
+
+                <div id="botsContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="adminDashboard" class="dashboard">
+        <div class="header">
+            <div class="header-content">
+                <div class="header-left">
+                    <h1>Admin Panel</h1>
+                </div>
+                <div class="header-right">
+                    <div class="credits-badge">
+                        Admin: <span>∞</span>
+                    </div>
+                    <div class="user-menu">
+                        <div class="user-avatar">A</div>
+                        <button class="btn-logout" onclick="logout()">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="admin-stats" id="adminStats"></div>
+            <div class="users-table">
+                <div class="table-header">User Management</div>
+                <table id="usersTable"></table>
+            </div>
         </div>
     </div>
 
@@ -417,174 +736,349 @@
     <div id="addBotModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 class="modal-title">Add New OTP Bot</h2>
-                <button class="close-btn" onclick="closeAddBotModal()">&times;</button>
+                <h2 class="modal-title">Add New Bot</h2>
             </div>
-
+            <div id="botFormAlert"></div>
             <form id="addBotForm">
                 <div class="form-group">
-                    <label class="form-label">User Name *</label>
-                    <input type="text" class="form-input" id="userName" required placeholder="e.g., John Doe">
+                    <label class="form-label">Bot Name *</label>
+                    <input type="text" class="form-input" id="botName" required>
                 </div>
-
                 <div class="form-group">
                     <label class="form-label">Panel Username *</label>
-                    <input type="text" class="form-input" id="panelUsername" required placeholder="Panel login username">
+                    <input type="text" class="form-input" id="panelUsername" required>
                 </div>
-
                 <div class="form-group">
                     <label class="form-label">Panel Password *</label>
-                    <input type="password" class="form-input" id="panelPassword" required placeholder="Panel login password">
+                    <input type="password" class="form-input" id="panelPassword" required>
                 </div>
-
-                <div class="form-group">
-                    <label class="form-label">Login URL (Optional)</label>
-                    <input type="text" class="form-input" id="loginUrl" placeholder="Default: http://139.99.63.204/ints/login">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">SMS Reports URL (Optional)</label>
-                    <input type="text" class="form-input" id="smsReportsUrl" placeholder="Default: http://139.99.63.204/ints/agent/SMSCDRReports">
-                </div>
-
                 <div class="form-group">
                     <label class="form-label">Telegram Bot Token *</label>
-                    <input type="text" class="form-input" id="botToken" required placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz">
+                    <input type="text" class="form-input" id="botToken" required>
                 </div>
-
                 <div class="form-group">
                     <label class="form-label">Telegram Channel IDs *</label>
                     <div id="channelInputs" class="channel-inputs">
                         <div class="channel-input-group">
                             <input type="text" class="form-input" placeholder="-1001234567890" required>
-                            <button type="button" class="remove-channel-btn" onclick="removeChannelInput(this)">✕</button>
+                            <button type="button" class="btn-remove" onclick="removeChannel(this)">✕</button>
                         </div>
                     </div>
-                    <button type="button" class="add-channel-btn" onclick="addChannelInput()">➕ Add Another Channel</button>
+                    <button type="button" class="btn-add-channel" onclick="addChannel()">➕ Add Channel</button>
                 </div>
-
-                <div class="form-group">
-                    <label class="form-label">Poll Interval (seconds)</label>
-                    <input type="number" class="form-input" id="pollInterval" value="30" min="5" placeholder="30">
+                <div class="alert alert-warning">
+                    <strong>Cost:</strong> 100 Credits | <strong>Validity:</strong> 7 Days (Auto-renews if you have sufficient credits)
                 </div>
-
                 <div class="form-actions">
-                    <button type="submit" class="btn-primary">🚀 Deploy Bot</button>
+                    <button type="submit" class="btn btn-primary">Create Bot (100C)</button>
                     <button type="button" class="btn-secondary" onclick="closeAddBotModal()">Cancel</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Logs Modal -->
-    <div id="logsModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">Bot Logs</h2>
-                <button class="close-btn" onclick="closeLogsModal()">&times;</button>
-            </div>
-            <div id="logsContent" class="logs-content">
-                Loading logs...
-            </div>
-        </div>
-    </div>
-
     <script>
         const API_URL = window.location.origin;
-        let currentLogsBotId = null;
+        let currentUser = null;
 
-        // Load bots on page load
-        document.addEventListener('DOMContentLoaded', () => {
-            loadBots();
-            setInterval(loadBots, 10000); // Refresh every 10 seconds
+        // Auth Functions
+        function showLogin() {
+            document.getElementById('loginPage').style.display = 'flex';
+            document.getElementById('signupPage').style.display = 'none';
+        }
+
+        function showSignup() {
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('signupPage').style.display = 'flex';
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const response = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    currentUser = data.user;
+                    if (currentUser.isAdmin) {
+                        showAdminDashboard();
+                    } else {
+                        showUserDashboard();
+                    }
+                } else {
+                    showAlert('loginAlert', data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('loginAlert', 'Connection error. Please try again.', 'error');
+            }
         });
+
+        document.getElementById('signupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('signupUsername').value;
+            const password = document.getElementById('signupPassword').value;
+
+            try {
+                const response = await fetch(`${API_URL}/api/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showAlert('signupAlert', data.message, 'success');
+                    setTimeout(() => showLogin(), 2000);
+                } else {
+                    showAlert('signupAlert', data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('signupAlert', 'Connection error. Please try again.', 'error');
+            }
+        });
+
+        async function logout() {
+            await fetch(`${API_URL}/api/auth/logout`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+            currentUser = null;
+            showLogin();
+        }
+
+        function showAlert(containerId, message, type) {
+            const alertClass = type === 'error' ? 'alert-error' : type === 'success' ? 'alert-success' : 'alert-warning';
+            document.getElementById(containerId).innerHTML = `<div class="alert ${alertClass}">${message}</div>`;
+        }
+
+        // Dashboard Functions
+        async function showUserDashboard() {
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('signupPage').style.display = 'none';
+            document.getElementById('userDashboard').style.display = 'block';
+            document.getElementById('adminDashboard').style.display = 'none';
+
+            document.getElementById('userCredits').textContent = currentUser.credits;
+            document.getElementById('userAvatar').textContent = currentUser.username[0].toUpperCase();
+
+            if (!currentUser.isApproved) {
+                document.getElementById('pendingApprovalNotice').style.display = 'block';
+                document.getElementById('approvedContent').style.display = 'none';
+            } else {
+                document.getElementById('pendingApprovalNotice').style.display = 'none';
+                document.getElementById('approvedContent').style.display = 'block';
+                loadBots();
+                setInterval(loadBots, 10000);
+            }
+        }
+
+        async function showAdminDashboard() {
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('signupPage').style.display = 'none';
+            document.getElementById('userDashboard').style.display = 'none';
+            document.getElementById('adminDashboard').style.display = 'block';
+
+            loadAdminStats();
+            loadUsers();
+            setInterval(() => {
+                loadAdminStats();
+                loadUsers();
+            }, 10000);
+        }
 
         async function loadBots() {
             try {
-                const response = await fetch(`${API_URL}/api/bots`);
+                const response = await fetch(`${API_URL}/api/bots`, { credentials: 'include' });
                 const bots = await response.json();
-                
+
                 const container = document.getElementById('botsContainer');
-                
+
                 if (bots.length === 0) {
-                    container.innerHTML = `
-                        <div class="empty-state">
-                            <h2>No bots configured yet</h2>
-                            <p>Click "Add OTP Bot" to create your first bot</p>
-                        </div>
-                    `;
+                    container.innerHTML = '<div class="empty-state"><h2>No bots yet</h2><p>Click "Add New Bot" to create your first bot</p></div>';
                     return;
                 }
 
                 container.innerHTML = '<div class="bots-grid">' + bots.map(bot => `
-                    <div class="bot-card">
-                        <div class="bot-header">
-                            <div class="bot-name">👤 ${bot.user_name}</div>
-                            <div class="status-badge ${bot.status === 'running' ? 'status-running' : 'status-stopped'}">
-                                ${bot.status === 'running' ? '🟢 Running' : '🔴 Stopped'}
-                            </div>
+                    <div class="bot-card" id="bot-${bot.id}">
+                        <div class="bot-card-header">
+                            <div class="bot-name">${bot.user_name}</div>
+                            <div class="status-badge status-${bot.status}">${bot.status}</div>
                         </div>
-                        
-                        <div class="bot-info">
-                            <div class="info-row">
-                                <span class="info-label">Panel User:</span>
+                        <div class="bot-card-body">
+                            <div class="bot-info-row">
+                                <span class="info-label">Panel User</span>
                                 <span class="info-value">${bot.panel_username}</span>
                             </div>
-                            <div class="info-row">
-                                <span class="info-label">Poll Interval:</span>
-                                <span class="info-value">${bot.poll_interval/1000}s</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">Channels:</span>
+                            <div class="bot-info-row">
+                                <span class="info-label">Channels</span>
                                 <span class="info-value">${bot.telegram_chat_ids.length}</span>
                             </div>
-                            <div class="channels-list">
-                                ${bot.telegram_chat_ids.map(id => `<span class="channel-tag">${id}</span>`).join('')}
+                            <div class="bot-info-row">
+                                <span class="info-label">Expires</span>
+                                <span class="info-value">${new Date(bot.expires_at).toLocaleDateString()}</span>
+                            </div>
+                            <div class="bot-console" id="console-${bot.id}">
+                                <div class="console-line console-info">[INFO] Bot ready</div>
                             </div>
                         </div>
-
                         <div class="bot-actions">
                             ${bot.status === 'running' 
-                                ? `<button class="btn btn-stop" onclick="stopBot('${bot.id}')">⏸️ Stop</button>`
-                                : `<button class="btn btn-start" onclick="startBot('${bot.id}')">▶️ Start</button>`
+                                ? `<button class="btn-action btn-stop" onclick="stopBot('${bot.id}')">⏸️ Stop</button>`
+                                : `<button class="btn-action btn-start" onclick="startBot('${bot.id}')">▶️ Start</button>`
                             }
-                            <button class="btn btn-logs" onclick="viewLogs('${bot.id}')">📋 Logs</button>
-                            <button class="btn btn-delete" onclick="deleteBot('${bot.id}', '${bot.user_name}')">🗑️ Delete</button>
+                            <button class="btn-action btn-delete" onclick="deleteBot('${bot.id}')">🗑️ Delete</button>
                         </div>
                     </div>
                 `).join('') + '</div>';
+
+                // Load logs for each bot
+                bots.forEach(bot => loadBotLogs(bot.id));
             } catch (error) {
                 console.error('Error loading bots:', error);
-                document.getElementById('botsContainer').innerHTML = `
-                    <div class="empty-state">
-                        <h2>Error loading bots</h2>
-                        <p>${error.message}</p>
-                    </div>
-                `;
             }
         }
 
+        async function loadBotLogs(botId) {
+            try {
+                const response = await fetch(`${API_URL}/api/bots/${botId}/logs?limit=5`, { credentials: 'include' });
+                const logs = await response.json();
+                
+                const consoleEl = document.getElementById(`console-${botId}`);
+                if (consoleEl && logs.length > 0) {
+                    consoleEl.innerHTML = logs.reverse().map(log => {
+                        const className = log.log_type === 'error' ? 'console-error' : 
+                                        log.log_type === 'warning' ? 'console-warning' : 
+                                        log.log_type === 'info' ? 'console-info' : 'console-success';
+                        const time = new Date(log.timestamp).toLocaleTimeString();
+                        return `<div class="console-line ${className}">[${time}] ${log.message}</div>`;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('Error loading logs:', error);
+            }
+        }
+
+        async function startBot(botId) {
+            const consoleEl = document.getElementById(`console-${botId}`);
+            const card = document.getElementById(`bot-${botId}`);
+            const statusBadge = card.querySelector('.status-badge');
+            
+            // Show deploying status
+            statusBadge.className = 'status-badge status-deploying';
+            statusBadge.innerHTML = '<span class="spinner"></span>Deploying';
+            consoleEl.innerHTML = '<div class="console-line console-info">[INFO] Initializing bot...</div>';
+
+            try {
+                const response = await fetch(`${API_URL}/api/bots/${botId}/start`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    consoleEl.innerHTML += '<div class="console-line console-success">[SUCCESS] Bot started successfully!</div>';
+                    setTimeout(() => loadBots(), 2000);
+                } else {
+                    consoleEl.innerHTML += `<div class="console-line console-error">[ERROR] ${data.error}</div>`;
+                    statusBadge.className = 'status-badge status-stopped';
+                    statusBadge.textContent = 'stopped';
+                }
+            } catch (error) {
+                consoleEl.innerHTML += '<div class="console-line console-error">[ERROR] Failed to start bot</div>';
+                statusBadge.className = 'status-badge status-stopped';
+                statusBadge.textContent = 'stopped';
+            }
+        }
+
+        async function stopBot(botId) {
+            if (!confirm('Stop this bot?')) return;
+
+            const consoleEl = document.getElementById(`console-${botId}`);
+            consoleEl.innerHTML += '<div class="console-line console-warning">[INFO] Stopping bot...</div>';
+
+            try {
+                const response = await fetch(`${API_URL}/api/bots/${botId}/stop`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    consoleEl.innerHTML += '<div class="console-line console-info">[INFO] Bot stopped</div>';
+                    setTimeout(() => loadBots(), 1000);
+                } else {
+                    const data = await response.json();
+                    consoleEl.innerHTML += `<div class="console-line console-error">[ERROR] ${data.error}</div>`;
+                }
+            } catch (error) {
+                consoleEl.innerHTML += '<div class="console-line console-error">[ERROR] Failed to stop bot</div>';
+            }
+        }
+
+        async function deleteBot(botId) {
+            if (!confirm('Delete this bot? This action cannot be undone.')) return;
+
+            try {
+                const response = await fetch(`${API_URL}/api/bots/${botId}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    loadBots();
+                    // Refresh credits
+                    const userResponse = await fetch(`${API_URL}/api/auth/me`, { credentials: 'include' });
+                    const userData = await userResponse.json();
+                    currentUser = userData;
+                    document.getElementById('userCredits').textContent = userData.credits;
+                } else {
+                    const data = await response.json();
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Failed to delete bot');
+            }
+        }
+
+        // Bot Modal Functions
         function openAddBotModal() {
             document.getElementById('addBotModal').style.display = 'block';
+            document.getElementById('botFormAlert').innerHTML = '';
         }
 
         function closeAddBotModal() {
             document.getElementById('addBotModal').style.display = 'none';
             document.getElementById('addBotForm').reset();
+            document.getElementById('channelInputs').innerHTML = `
+                <div class="channel-input-group">
+                    <input type="text" class="form-input" placeholder="-1001234567890" required>
+                    <button type="button" class="btn-remove" onclick="removeChannel(this)">✕</button>
+                </div>
+            `;
         }
 
-        function addChannelInput() {
+        function addChannel() {
             const container = document.getElementById('channelInputs');
             const div = document.createElement('div');
             div.className = 'channel-input-group';
             div.innerHTML = `
                 <input type="text" class="form-input" placeholder="-1001234567890" required>
-                <button type="button" class="remove-channel-btn" onclick="removeChannelInput(this)">✕</button>
+                <button type="button" class="btn-remove" onclick="removeChannel(this)">✕</button>
             `;
             container.appendChild(div);
         }
 
-        function removeChannelInput(btn) {
+        function removeChannel(btn) {
             const container = document.getElementById('channelInputs');
             if (container.children.length > 1) {
                 btn.parentElement.remove();
@@ -595,145 +1089,202 @@
 
         document.getElementById('addBotForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
+            if (currentUser.credits < 100) {
+                showAlert('botFormAlert', 'Insufficient credits! You need 100 credits to create a bot.', 'error');
+                return;
+            }
+
             const channelInputs = document.querySelectorAll('#channelInputs input');
             const channelIds = Array.from(channelInputs).map(input => input.value.trim()).filter(v => v);
-            
+
             const botData = {
-                user_name: document.getElementById('userName').value,
+                user_name: document.getElementById('botName').value,
                 panel_username: document.getElementById('panelUsername').value,
                 panel_password: document.getElementById('panelPassword').value,
-                login_url: document.getElementById('loginUrl').value || undefined,
-                sms_reports_url: document.getElementById('smsReportsUrl').value || undefined,
                 telegram_bot_token: document.getElementById('botToken').value,
-                telegram_chat_ids: channelIds,
-                poll_interval: parseInt(document.getElementById('pollInterval').value) * 1000
+                telegram_chat_ids: channelIds
             };
 
             try {
                 const response = await fetch(`${API_URL}/api/bots`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify(botData)
                 });
 
-                const result = await response.json();
-                
+                const data = await response.json();
+
                 if (response.ok) {
-                    alert(`Bot created successfully for ${result.user_name}!\n\nClick "Start" to begin monitoring.`);
-                    closeAddBotModal();
-                    loadBots();
+                    showAlert('botFormAlert', 'Bot created successfully! -100 Credits', 'success');
+                    
+                    // Update credits
+                    const userResponse = await fetch(`${API_URL}/api/auth/me`, { credentials: 'include' });
+                    const userData = await userResponse.json();
+                    currentUser = userData;
+                    document.getElementById('userCredits').textContent = userData.credits;
+
+                    setTimeout(() => {
+                        closeAddBotModal();
+                        loadBots();
+                    }, 1500);
                 } else {
-                    alert(`Error: ${result.error}`);
+                    showAlert('botFormAlert', data.error, 'error');
                 }
             } catch (error) {
-                alert(`Error creating bot: ${error.message}`);
+                showAlert('botFormAlert', 'Failed to create bot. Please try again.', 'error');
             }
         });
 
-        async function startBot(botId) {
-            if (!confirm('Start this bot?')) return;
-            
+        // Admin Functions
+        async function loadAdminStats() {
             try {
-                const response = await fetch(`${API_URL}/api/bots/${botId}/start`, {
-                    method: 'POST'
-                });
+                const response = await fetch(`${API_URL}/api/admin/stats`, { credentials: 'include' });
+                const stats = await response.json();
 
-                const result = await response.json();
-                
-                if (response.ok) {
-                    alert('Bot started successfully!');
-                    loadBots();
-                } else {
-                    alert(`Error: ${result.error}`);
-                }
-            } catch (error) {
-                alert(`Error starting bot: ${error.message}`);
-            }
-        }
-
-        async function stopBot(botId) {
-            if (!confirm('Stop this bot?')) return;
-            
-            try {
-                const response = await fetch(`${API_URL}/api/bots/${botId}/stop`, {
-                    method: 'POST'
-                });
-
-                const result = await response.json();
-                
-                if (response.ok) {
-                    alert('Bot stopped successfully!');
-                    loadBots();
-                } else {
-                    alert(`Error: ${result.error}`);
-                }
-            } catch (error) {
-                alert(`Error stopping bot: ${error.message}`);
-            }
-        }
-
-        async function deleteBot(botId, userName) {
-            if (!confirm(`Delete bot for ${userName}?\n\nThis action cannot be undone.`)) return;
-            
-            try {
-                const response = await fetch(`${API_URL}/api/bots/${botId}`, {
-                    method: 'DELETE'
-                });
-
-                const result = await response.json();
-                
-                if (response.ok) {
-                    alert('Bot deleted successfully!');
-                    loadBots();
-                } else {
-                    alert(`Error: ${result.error}`);
-                }
-            } catch (error) {
-                alert(`Error deleting bot: ${error.message}`);
-            }
-        }
-
-        async function viewLogs(botId) {
-            currentLogsBotId = botId;
-            document.getElementById('logsModal').style.display = 'block';
-            
-            try {
-                const response = await fetch(`${API_URL}/api/bots/${botId}/logs`);
-                const logs = await response.json();
-                
-                const logsContent = document.getElementById('logsContent');
-                
-                if (logs.length === 0) {
-                    logsContent.innerHTML = '<div class="log-entry">No logs available</div>';
-                    return;
-                }
-
-                logsContent.innerHTML = logs.map(log => `
-                    <div class="log-entry log-${log.log_type}">
-                        <strong>[${new Date(log.timestamp).toLocaleString()}]</strong>
-                        [${log.log_type.toUpperCase()}]
-                        ${log.message}
+                document.getElementById('adminStats').innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.totalUsers}</div>
+                        <div class="stat-label">Total Users</div>
                     </div>
-                `).join('');
-            } catch (error) {
-                document.getElementById('logsContent').innerHTML = `
-                    <div class="log-entry log-error">Error loading logs: ${error.message}</div>
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.pendingApprovals}</div>
+                        <div class="stat-label">Pending Approvals</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.totalBots}</div>
+                        <div class="stat-label">Total Bots</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.activeBots}</div>
+                        <div class="stat-label">Active Bots</div>
+                    </div>
                 `;
+            } catch (error) {
+                console.error('Error loading stats:', error);
             }
         }
 
-        function closeLogsModal() {
-            document.getElementById('logsModal').style.display = 'none';
-            currentLogsBotId = null;
+        async function loadUsers() {
+            try {
+                const response = await fetch(`${API_URL}/api/admin/users`, { credentials: 'include' });
+                const users = await response.json();
+
+                const table = document.getElementById('usersTable');
+                table.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Credits</th>
+                            <th>Status</th>
+                            <th>Joined</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${users.map(user => `
+                            <tr>
+                                <td><strong>${user.username}</strong> ${user.is_admin ? '👑' : ''}</td>
+                                <td>${user.credits}C</td>
+                                <td>
+                                    ${user.is_approved 
+                                        ? '<span style="color: var(--secondary)">✓ Approved</span>' 
+                                        : '<span style="color: var(--warning)">⏳ Pending</span>'
+                                    }
+                                </td>
+                                <td>${new Date(user.created_at).toLocaleDateString()}</td>
+                                <td>
+                                    ${!user.is_approved && !user.is_admin
+                                        ? `<button class="btn-small btn-approve" onclick="approveUser('${user.id}')">Approve</button>`
+                                        : ''
+                                    }
+                                    ${!user.is_admin
+                                        ? `<button class="btn-small btn-gift" onclick="giftCredits('${user.id}', '${user.username}')">Gift Credits</button>`
+                                        : ''
+                                    }
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                `;
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
         }
+
+        async function approveUser(userId) {
+            if (!confirm('Approve this user? They will receive 100 credits.')) return;
+
+            try {
+                const response = await fetch(`${API_URL}/api/admin/users/${userId}/approve`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    alert('User approved and 100 credits granted!');
+                    loadAdminStats();
+                    loadUsers();
+                } else {
+                    const data = await response.json();
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Failed to approve user');
+            }
+        }
+
+        async function giftCredits(userId, username) {
+            const amount = prompt(`Gift credits to ${username}:\n\nEnter amount:`, '100');
+            if (!amount || isNaN(amount) || parseInt(amount) <= 0) return;
+
+            try {
+                const response = await fetch(`${API_URL}/api/admin/users/${userId}/gift-credits`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ amount: parseInt(amount) })
+                });
+
+                if (response.ok) {
+                    alert(`${amount} credits gifted to ${username}!`);
+                    loadUsers();
+                } else {
+                    const data = await response.json();
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Failed to gift credits');
+            }
+        }
+
+        // Check authentication on page load
+        window.onload = async () => {
+            try {
+                const response = await fetch(`${API_URL}/api/auth/me`, { credentials: 'include' });
+                if (response.ok) {
+                    const user = await response.json();
+                    currentUser = user;
+                    if (user.isAdmin) {
+                        showAdminDashboard();
+                    } else {
+                        showUserDashboard();
+                    }
+                } else {
+                    showLogin();
+                }
+            } catch (error) {
+                showLogin();
+            }
+        };
 
         // Close modals when clicking outside
-        window.onclick = function(event) {
+        window.onclick = (event) => {
             if (event.target.classList.contains('modal')) {
                 event.target.style.display = 'none';
             }
-        }
+        };
     </script>
 </body>
 </html>
