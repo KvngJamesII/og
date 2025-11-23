@@ -48,33 +48,3 @@ EXPOSE 8000
 
 # Start the server
 CMD ["node", "server.js"]
-```
-
-#### 5. **.gitignore**
-```
-# Dependencies
-node_modules/
-package-lock.json
-
-# Database
-*.db
-*.db-journal
-
-# Bot Data
-data/
-
-# Environment
-.env
-
-# Logs
-*.log
-
-# OS Files
-.DS_Store
-
-# IDE
-.vscode/
-.idea/
-
-# Railway
-.railway/
