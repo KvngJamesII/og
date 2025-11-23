@@ -1,0 +1,23 @@
+{
+  "name": "multi-tenant-otp-bot",
+  "version": "2.0.0",
+  "description": "Multi-tenant Telegram OTP bot manager with web interface",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "otp",
+    "sms",
+    "multi-tenant"
+  ],
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "sqlite3": "^5.1.7",
+    "node-telegram-bot-api": "^0.66.0",
+    "puppeteer": "^23.11.1"
+  }
+}
