@@ -436,13 +436,13 @@ Your bot is now actively monitoring for OTPs again. All systems operational! �
   extractOTP(message) {
     if (!message) return null;
     
-    // Common OTP patterns
+    // Common OTP patterns - ordered by specificity (most specific first)
     const patterns = [
-      /\b(\d{4,8})\b/g,           // 4-8 digit codes
+      /\d{3}-\d{3}/g,             // Format like "803-231" (most specific)
       /code[:\s]+(\d{3,8})/gi,    // "code: 123456" or "code 123456"
       /otp[:\s]+(\d{3,8})/gi,     // "OTP: 123456"
       /verification[:\s]+(\d{3,8})/gi, // "verification: 123456"
-      /(\d{3})-(\d{3})/g,         // Format like "322-641"
+      /\b(\d{4,8})\b/g,           // 4-8 digit codes (least specific)
     ];
     
     for (const pattern of patterns) {
@@ -482,7 +482,9 @@ Your bot is now actively monitoring for OTPs again. All systems operational! �
 🔔 *NEW OTP RECEIVED*
 ━━━━━━━━━━━━━━━━━━━━
 📤 *Source:* \`${source}\`
+
 📱 *Destination:* \`${maskedDestination}\`
+
 ${otpLine}💬 *Message:*
 \`\`\`
 ${message}
