@@ -7,6 +7,61 @@ class BotManager {
   constructor(db) {
     this.db = db;
     this.bots = new Map(); // botId -> bot instance data
+    this.maintenanceMode = false;
+  }
+
+  async enableMaintenanceMode() {
+    this.maintenanceMode = true;
+    console.log('🔧 Maintenance mode ENABLED');
+    
+    // Send maintenance notice to all running bots
+    for (const [botId, botInstance] of this.bots.entries()) {
+      await this.sendMaintenanceNotice(botInstance, true);
+    }
+  }
+
+  async disableMaintenanceMode() {
+    this.maintenanceMode = false;
+    console.log('✅ Maintenance mode DISABLED');
+    
+    // Send normal operation notice to all running bots
+    for (const [botId, botInstance] of this.bots.entries()) {
+      await this.sendMaintenanceNotice(botInstance, false);
+    }
+  }
+
+  async sendMaintenanceNotice(botInstance, isEnabled) {
+    const message = isEnabled 
+      ? `🔧 *MAINTENANCE MODE ACTIVATED*
+━━━━━━━━━━━━━━━━━━━━
+⚠️ The OTP monitoring system is temporarily under maintenance.
+
+📊 *Status:* Paused
+🔄 *Action:* No OTPs will be forwarded during this period
+⏰ *Duration:* Until maintenance is completed
+
+Please wait for the system to return to normal operation. You will be notified when service resumes.
+
+Thank you for your patience! 🙏
+━━━━━━━━━━━━━━━━━━━━`
+      : `✅ *MAINTENANCE COMPLETED*
+━━━━━━━━━━━━━━━━━━━━
+🎉 The OTP monitoring system is back online!
+
+📊 *Status:* Active
+🔄 *Action:* OTP forwarding has resumed
+⏰ *Time:* ${new Date().toLocaleString()}
+
+Your bot is now actively monitoring for OTPs again. All systems operational! 🚀
+━━━━━━━━━━━━━━━━━━━━`;
+
+    for (const chatId of botInstance.config.telegram_chat_ids) {
+      try {
+        await botInstance.telegramBot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+      } catch (err) {
+        console.error(`❌ [${botInstance.id}] Failed to send maintenance notice to ${chatId}:`, err.message);
+      }
+    }
   }
 
   async startBot(botId) {
@@ -64,6 +119,11 @@ class BotManager {
 
       // Send connection message
       await this.sendConnectionMessage(botInstance);
+
+      // If maintenance mode is active, notify immediately
+      if (this.maintenanceMode) {
+        await this.sendMaintenanceNotice(botInstance, true);
+      }
 
       this.log(botId, 'info', `Bot started successfully for user: ${config.user_name}`);
       
@@ -400,6 +460,12 @@ class BotManager {
   }
 
   async sendOTPToTelegram(botInstance, sms) {
+    // Skip sending if maintenance mode is enabled
+    if (this.maintenanceMode) {
+      console.log(`🔧 [${botInstance.id}] Maintenance mode active - skipping OTP`);
+      return;
+    }
+
     try {
       const source = sms.source_addr || 'Unknown';
       const destination = sms.destination_addr || 'Unknown';
@@ -453,7 +519,11 @@ ${message}
           if (!botInstance.sentMessageHashes.has(sms.hash)) {
             await this.sendOTPToTelegram(botInstance, sms);
             botInstance.sentMessageHashes.add(sms.hash);
-            newCount++;
+            
+            // Only increment if not in maintenance mode
+            if (!this.maintenanceMode) {
+              newCount++;
+            }
             
             if (botInstance.sentMessageHashes.size > 1000) {
               const hashArray = Array.from(botInstance.sentMessageHashes);
@@ -535,11 +605,14 @@ ${message}
       const timeSinceLastPoll = Date.now() - botInstance.lastSuccessfulPoll;
       const minutesSinceLastPoll = Math.floor(timeSinceLastPoll / 60000);
       const daysRemaining = this.getDaysRemaining(botInstance.config.expires_at);
+      const maintenanceStatus = this.maintenanceMode ? '🔧 Under Maintenance' : '✅ Operational';
       
       const statusMessage = `📊 *Bot Status - ${botInstance.config.user_name}*
 ━━━━━━━━━━━━━━━━━━━━
 
 ✅ *Status:* ${botInstance.browser ? 'Running' : 'Reconnecting...'}
+
+🔧 *System:* ${maintenanceStatus}
 
 📨 *OTPs Sent:* ${botInstance.otpsSentCount}
 
@@ -568,6 +641,7 @@ ${message}
 
   async sendConnectionMessage(botInstance) {
     const daysRemaining = this.getDaysRemaining(botInstance.config.expires_at);
+    const planName = botInstance.config.billing_plan === 'monthly' ? 'Monthly' : 'Weekly';
     
     const message = `✅ *OTP Bot Connected - ${botInstance.config.user_name}*
 
@@ -575,6 +649,7 @@ The bot is now active and monitoring for OTPs.
 Use /status to check connection status.
 
 ⏱️ Poll interval: ${botInstance.config.poll_interval/1000}s
+📋 Plan: ${planName}
 💳 Subscription: ${daysRemaining}`;
     
     for (const chatId of botInstance.config.telegram_chat_ids) {
