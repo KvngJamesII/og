@@ -35,7 +35,8 @@ class BotManager {
         isPolling: false,
         pollCount: 0,
         lastSuccessfulPoll: Date.now(),
-        messagesFile: `./data/bot-${botId}-messages.json`
+        messagesFile: `./data/bot-${botId}-messages.json`,
+        otpsSentCount: 0 // Track number of OTPs sent
       };
 
       // Load previous messages
@@ -354,19 +355,69 @@ class BotManager {
     }
   }
 
+  // Helper function to mask phone number
+  maskPhoneNumber(phoneNumber) {
+    if (!phoneNumber || phoneNumber.length < 4) {
+      return phoneNumber;
+    }
+    
+    const length = phoneNumber.length;
+    const visibleStart = Math.ceil(length / 3);
+    const visibleEnd = Math.ceil(length / 3);
+    
+    const start = phoneNumber.substring(0, visibleStart);
+    const end = phoneNumber.substring(length - visibleEnd);
+    const mask = '****';
+    
+    return `${start}${mask}${end}`;
+  }
+
+  // Helper function to extract OTP from message
+  extractOTP(message) {
+    if (!message) return null;
+    
+    // Common OTP patterns
+    const patterns = [
+      /\b(\d{4,8})\b/g,           // 4-8 digit codes
+      /code[:\s]+(\d{3,8})/gi,    // "code: 123456" or "code 123456"
+      /otp[:\s]+(\d{3,8})/gi,     // "OTP: 123456"
+      /verification[:\s]+(\d{3,8})/gi, // "verification: 123456"
+      /(\d{3})-(\d{3})/g,         // Format like "322-641"
+    ];
+    
+    for (const pattern of patterns) {
+      const matches = message.match(pattern);
+      if (matches && matches.length > 0) {
+        // Return the first match, clean it up
+        let otp = matches[0];
+        // Remove common prefixes
+        otp = otp.replace(/code[:\s]+/gi, '').replace(/otp[:\s]+/gi, '').replace(/verification[:\s]+/gi, '');
+        return otp.trim();
+      }
+    }
+    
+    return null;
+  }
+
   async sendOTPToTelegram(botInstance, sms) {
     try {
       const source = sms.source_addr || 'Unknown';
       const destination = sms.destination_addr || 'Unknown';
       const message = (sms.short_message || 'No content').replace(/\u0000/g, '');
+      
+      // Mask the phone numbers
+      const maskedDestination = this.maskPhoneNumber(destination);
+      
+      // Extract OTP
+      const extractedOTP = this.extractOTP(message);
+      const otpLine = extractedOTP ? `🔑 *OTP:* \`${extractedOTP}\`\n\n` : '';
 
       const formatted = `
 🔔 *NEW OTP RECEIVED*
 ━━━━━━━━━━━━━━━━━━━━
 📤 *Source:* \`${source}\`
-📱 *Destination:* \`${destination}\`
-
-💬 *Message:*
+📱 *Destination:* \`${maskedDestination}\`
+${otpLine}💬 *Message:*
 \`\`\`
 ${message}
 \`\`\`
@@ -377,6 +428,7 @@ ${message}
       for (const chatId of botInstance.config.telegram_chat_ids) {
         try {
           await botInstance.telegramBot.sendMessage(chatId, formatted, { parse_mode: 'Markdown' });
+          botInstance.otpsSentCount++; // Increment OTP sent counter
         } catch (err) {
           console.error(`❌ [${botInstance.id}] Send failed to ${chatId}:`, err.message);
         }
@@ -453,6 +505,21 @@ ${message}
     }
   }
 
+  // Calculate days remaining until expiry
+  getDaysRemaining(expiresAt) {
+    if (!expiresAt) return 'N/A';
+    
+    const now = new Date();
+    const expiry = new Date(expiresAt);
+    const diffTime = expiry - now;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) return 'Expired';
+    if (diffDays === 0) return 'Expires Today';
+    if (diffDays === 1) return '1 Day Left';
+    return `${diffDays} Days Left`;
+  }
+
   setupTelegramHandlers(botInstance) {
     botInstance.telegramBot.onText(/\/start/, (msg) => {
       botInstance.telegramBot.sendMessage(
@@ -467,18 +534,29 @@ ${message}
       const minutes = Math.floor((uptime % 3600) / 60);
       const timeSinceLastPoll = Date.now() - botInstance.lastSuccessfulPoll;
       const minutesSinceLastPoll = Math.floor(timeSinceLastPoll / 60000);
+      const daysRemaining = this.getDaysRemaining(botInstance.config.expires_at);
       
       const statusMessage = `📊 *Bot Status - ${botInstance.config.user_name}*
 ━━━━━━━━━━━━━━━━━━━━
-✅ Status: ${botInstance.browser ? 'Running' : 'Reconnecting...'}
-📨 Messages Tracked: ${botInstance.sentMessageHashes.size}
-⏱️ Poll Interval: ${botInstance.config.poll_interval/1000}s
-🌐 Browser: ${botInstance.browser ? 'Active ✅' : 'Inactive ❌'}
-📡 Active Channels: ${botInstance.config.telegram_chat_ids.length}
-📊 Total Polls: ${botInstance.pollCount}
-🕐 Last Poll: ${minutesSinceLastPoll}m ago
-⏰ Uptime: ${hours}h ${minutes}m
-━━━━━━━━━━━━━━━━━━━━`;
+
+✅ *Status:* ${botInstance.browser ? 'Running' : 'Reconnecting...'}
+
+📨 *OTPs Sent:* ${botInstance.otpsSentCount}
+
+⏱️ *Poll Interval:* ${botInstance.config.poll_interval/1000}s
+
+🌐 *Browser:* ${botInstance.browser ? 'Active ✅' : 'Inactive ❌'}
+
+📡 *Active Channels:* ${botInstance.config.telegram_chat_ids.length}
+
+📊 *Total Polls:* ${botInstance.pollCount}
+
+🕐 *Last Poll:* ${minutesSinceLastPoll}m ago
+
+⏰ *Uptime:* ${hours}h ${minutes}m
+
+━━━━━━━━━━━━━━━━━━━━
+💳 *Cost:* ${daysRemaining}`;
       
       botInstance.telegramBot.sendMessage(msg.chat.id, statusMessage, { parse_mode: 'Markdown' });
     });
@@ -489,12 +567,15 @@ ${message}
   }
 
   async sendConnectionMessage(botInstance) {
+    const daysRemaining = this.getDaysRemaining(botInstance.config.expires_at);
+    
     const message = `✅ *OTP Bot Connected - ${botInstance.config.user_name}*
 
 The bot is now active and monitoring for OTPs.
 Use /status to check connection status.
 
-⏱️ Poll interval: ${botInstance.config.poll_interval/1000}s`;
+⏱️ Poll interval: ${botInstance.config.poll_interval/1000}s
+💳 Subscription: ${daysRemaining}`;
     
     for (const chatId of botInstance.config.telegram_chat_ids) {
       try {
