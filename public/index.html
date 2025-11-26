@@ -598,6 +598,19 @@
             color: white;
         }
 
+        .billing-info {
+            background: var(--light-gray);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: var(--gray);
+            margin-top: 8px;
+        }
+
+        .billing-info strong {
+            color: var(--dark);
+        }
+
         @media (max-width: 768px) {
             .bots-grid {
                 grid-template-columns: 1fr;
@@ -725,6 +738,18 @@
 
         <div class="container">
             <div class="admin-stats" id="adminStats"></div>
+            
+            <div style="margin-bottom: 32px; background: white; border-radius: 12px; border: 1px solid var(--border); padding: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 style="font-size: 18px; color: var(--dark);">System Maintenance</h3>
+                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                        <input type="checkbox" id="maintenanceToggle" onchange="toggleMaintenance()" style="width: 20px; height: 20px;">
+                        <span id="maintenanceStatus" style="font-weight: 600; color: var(--gray);">Disabled</span>
+                    </label>
+                </div>
+                <p style="color: var(--gray); font-size: 14px;">When enabled, all bots will pause and users will receive maintenance notifications.</p>
+            </div>
+            
             <div class="users-table">
                 <div class="table-header">User Management</div>
                 <table id="usersTable"></table>
@@ -766,8 +791,15 @@
                     </div>
                     <button type="button" class="btn-add-channel" onclick="addChannel()">➕ Add Channel</button>
                 </div>
+                <div class="form-group">
+                    <label class="form-label">Billing Plan *</label>
+                    <select class="form-input" id="billingPlan" onchange="updateCostDisplay()">
+                        <option value="weekly">Weekly Plan - 100 Credits (7 days)</option>
+                        <option value="monthly">Monthly Plan - 400 Credits (30 days)</option>
+                    </select>
+                </div>
                 <div class="alert alert-warning">
-                    <strong>Cost:</strong> 100 Credits | <strong>Validity:</strong> 7 Days (Auto-renews if you have sufficient credits)
+                    <strong>Cost:</strong> <span id="costDisplay">100</span> Credits | <strong>Validity:</strong> <span id="validityDisplay">7 Days</span> (Auto-renews if you have sufficient credits)
                 </div>
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Create Bot (100C)</button>
@@ -1087,11 +1119,26 @@
             }
         }
 
+        function updateCostDisplay() {
+            const plan = document.getElementById('billingPlan').value;
+            const plans = {
+                weekly: { cost: 100, validity: '7 Days' },
+                monthly: { cost: 400, validity: '30 Days' }
+            };
+            const selected = plans[plan];
+            document.getElementById('costDisplay').textContent = selected.cost;
+            document.getElementById('validityDisplay').textContent = selected.validity;
+        }
+
         document.getElementById('addBotForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            if (currentUser.credits < 100) {
-                showAlert('botFormAlert', 'Insufficient credits! You need 100 credits to create a bot.', 'error');
+            const billingPlan = document.getElementById('billingPlan').value;
+            const planCosts = { weekly: 100, monthly: 400 };
+            const requiredCredits = planCosts[billingPlan];
+
+            if (currentUser.credits < requiredCredits) {
+                showAlert('botFormAlert', `Insufficient credits! You need ${requiredCredits} credits for ${billingPlan} plan.`, 'error');
                 return;
             }
 
@@ -1103,7 +1150,8 @@
                 panel_username: document.getElementById('panelUsername').value,
                 panel_password: document.getElementById('panelPassword').value,
                 telegram_bot_token: document.getElementById('botToken').value,
-                telegram_chat_ids: channelIds
+                telegram_chat_ids: channelIds,
+                billing_plan: billingPlan
             };
 
             try {
@@ -1117,7 +1165,9 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    showAlert('botFormAlert', 'Bot created successfully! -100 Credits', 'success');
+                    const planCosts = { weekly: 100, monthly: 400 };
+                    const cost = planCosts[billingPlan];
+                    showAlert('botFormAlert', `Bot created successfully! -${cost} Credits`, 'success');
                     
                     // Update credits
                     const userResponse = await fetch(`${API_URL}/api/auth/me`, { credentials: 'include' });
@@ -1163,6 +1213,45 @@
                 `;
             } catch (error) {
                 console.error('Error loading stats:', error);
+            }
+
+            // Load maintenance status
+            loadMaintenanceStatus();
+        }
+
+        async function loadMaintenanceStatus() {
+            try {
+                const response = await fetch(`${API_URL}/api/admin/maintenance`, { credentials: 'include' });
+                const data = await response.json();
+                document.getElementById('maintenanceToggle').checked = data.maintenanceMode;
+                document.getElementById('maintenanceStatus').textContent = data.maintenanceMode ? 'Enabled' : 'Disabled';
+                document.getElementById('maintenanceStatus').style.color = data.maintenanceMode ? 'var(--danger)' : 'var(--gray)';
+            } catch (error) {
+                console.error('Error loading maintenance status:', error);
+            }
+        }
+
+        async function toggleMaintenance() {
+            const enabled = document.getElementById('maintenanceToggle').checked;
+            try {
+                const response = await fetch(`${API_URL}/api/admin/maintenance/toggle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ enabled })
+                });
+
+                if (response.ok) {
+                    document.getElementById('maintenanceStatus').textContent = enabled ? 'Enabled' : 'Disabled';
+                    document.getElementById('maintenanceStatus').style.color = enabled ? 'var(--danger)' : 'var(--gray)';
+                    alert(`Maintenance mode ${enabled ? 'enabled' : 'disabled'}`);
+                } else {
+                    document.getElementById('maintenanceToggle').checked = !enabled;
+                    alert('Failed to update maintenance mode');
+                }
+            } catch (error) {
+                document.getElementById('maintenanceToggle').checked = !enabled;
+                alert('Error updating maintenance mode');
             }
         }
 
