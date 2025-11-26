@@ -62,7 +62,7 @@ function initializeDatabase() {
     }
   });
 
-  // Bot configs table
+  // Bot configs table with billing_plan
   db.run(`
     CREATE TABLE IF NOT EXISTS bot_configs (
       id TEXT PRIMARY KEY,
@@ -76,6 +76,7 @@ function initializeDatabase() {
       telegram_chat_ids TEXT NOT NULL,
       poll_interval INTEGER DEFAULT 30000,
       status TEXT DEFAULT 'stopped',
+      billing_plan TEXT DEFAULT 'weekly',
       expires_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -107,6 +108,23 @@ function initializeDatabase() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
+
+  // System settings table for maintenance mode
+  db.run(`
+    CREATE TABLE IF NOT EXISTS system_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `, (err) => {
+    if (!err) {
+      // Initialize maintenance mode setting
+      db.run(
+        'INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)',
+        ['maintenance_mode', 'false']
+      );
+    }
+  });
 }
 
 async function createAdminAccount() {
@@ -343,6 +361,57 @@ app.get('/api/admin/stats', requireAdmin, (req, res) => {
   });
 });
 
+// Maintenance mode endpoints
+app.get('/api/admin/maintenance', requireAdmin, (req, res) => {
+  db.get('SELECT value FROM system_settings WHERE key = ?', ['maintenance_mode'], (err, row) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json({ maintenanceMode: row ? row.value === 'true' : false });
+  });
+});
+
+app.post('/api/admin/maintenance/toggle', requireAdmin, async (req, res) => {
+  const { enabled } = req.body;
+  
+  try {
+    // Update maintenance mode setting
+    db.run(
+      'UPDATE system_settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?',
+      [enabled ? 'true' : 'false', 'maintenance_mode'],
+      async (err) => {
+        if (err) {
+          return res.status(500).json({ error: err.message });
+        }
+
+        // Notify bot manager about maintenance mode change
+        if (enabled) {
+          await botManager.enableMaintenanceMode();
+        } else {
+          await botManager.disableMaintenanceMode();
+        }
+
+        res.json({ 
+          message: `Maintenance mode ${enabled ? 'enabled' : 'disabled'}`,
+          maintenanceMode: enabled 
+        });
+      }
+    );
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get maintenance status (public endpoint for users to check)
+app.get('/api/maintenance-status', (req, res) => {
+  db.get('SELECT value FROM system_settings WHERE key = ?', ['maintenance_mode'], (err, row) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json({ maintenanceMode: row ? row.value === 'true' : false });
+  });
+});
+
 // BOT ROUTES (Protected)
 
 // Get user's bots
@@ -380,17 +449,29 @@ app.post('/api/bots', requireAuth, (req, res) => {
       return res.status(403).json({ error: 'Account not approved yet' });
     }
 
-    if (user.credits < 100 && !user.is_admin) {
-      return res.status(400).json({ error: 'Insufficient credits. You need 100 credits to create a bot.' });
-    }
-
     const {
       user_name,
       panel_username,
       panel_password,
       telegram_bot_token,
-      telegram_chat_ids
+      telegram_chat_ids,
+      billing_plan
     } = req.body;
+
+    // Validate billing plan and calculate cost
+    const validPlans = { weekly: 100, monthly: 400 };
+    const plan = billing_plan || 'weekly';
+    const cost = validPlans[plan];
+
+    if (!cost) {
+      return res.status(400).json({ error: 'Invalid billing plan' });
+    }
+
+    if (user.credits < cost && !user.is_admin) {
+      return res.status(400).json({ 
+        error: `Insufficient credits. You need ${cost} credits for ${plan} plan.` 
+      });
+    }
 
     if (!user_name || !panel_username || !panel_password || !telegram_bot_token || !telegram_chat_ids || telegram_chat_ids.length === 0) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -398,18 +479,21 @@ app.post('/api/bots', requireAuth, (req, res) => {
 
     const id = crypto.randomBytes(16).toString('hex');
     const chatIdsJson = JSON.stringify(telegram_chat_ids);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
+    
+    // Calculate expiry based on billing plan
+    const expiryDays = plan === 'monthly' ? 30 : 7;
+    const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
 
     const query = `
       INSERT INTO bot_configs (
         id, user_id, user_name, panel_username, panel_password, 
-        telegram_bot_token, telegram_chat_ids, expires_at, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'stopped')
+        telegram_bot_token, telegram_chat_ids, billing_plan, expires_at, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'stopped')
     `;
 
     db.run(
       query,
-      [id, req.session.userId, user_name, panel_username, panel_password, telegram_bot_token, chatIdsJson, expiresAt.toISOString()],
+      [id, req.session.userId, user_name, panel_username, panel_password, telegram_bot_token, chatIdsJson, plan, expiresAt.toISOString()],
       function(err) {
         if (err) {
           return res.status(500).json({ error: err.message });
@@ -417,19 +501,21 @@ app.post('/api/bots', requireAuth, (req, res) => {
 
         // Deduct credits (if not admin)
         if (!user.is_admin) {
-          db.run('UPDATE users SET credits = credits - 100 WHERE id = ?', [req.session.userId]);
+          db.run('UPDATE users SET credits = credits - ? WHERE id = ?', [cost, req.session.userId]);
           
           // Log transaction
           db.run(
             'INSERT INTO credit_transactions (user_id, amount, type, description) VALUES (?, ?, ?, ?)',
-            [req.session.userId, -100, 'bot_creation', `Created bot: ${user_name}`]
+            [req.session.userId, -cost, 'bot_creation', `Created bot: ${user_name} (${plan})`]
           );
         }
         
         res.json({
           id,
-          message: 'Bot created successfully',
+          message: `Bot created successfully (${plan} plan)`,
           user_name,
+          billing_plan: plan,
+          cost,
           expiresAt: expiresAt.toISOString()
         });
       }
@@ -525,11 +611,14 @@ app.get('/api/bots/:id/logs', requireAuth, (req, res) => {
 app.get('/health', (req, res) => {
   const runningBots = botManager.getRunningBotsCount();
   
-  res.json({
-    status: 'ok',
-    uptime: process.uptime(),
-    runningBots,
-    timestamp: new Date().toISOString()
+  db.get('SELECT value FROM system_settings WHERE key = ?', ['maintenance_mode'], (err, row) => {
+    res.json({
+      status: 'ok',
+      uptime: process.uptime(),
+      runningBots,
+      maintenanceMode: row ? row.value === 'true' : false,
+      timestamp: new Date().toISOString()
+    });
   });
 });
 
@@ -547,20 +636,24 @@ setInterval(() => {
       db.get('SELECT * FROM users WHERE id = ?', [bot.user_id], (err, user) => {
         if (err || !user) return;
 
-        if (user.is_admin || user.credits >= 100) {
+        // Calculate renewal cost based on billing plan
+        const renewalCost = bot.billing_plan === 'monthly' ? 400 : 100;
+        const renewalDays = bot.billing_plan === 'monthly' ? 30 : 7;
+
+        if (user.is_admin || user.credits >= renewalCost) {
           // Renew bot
-          const newExpiryDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          const newExpiryDate = new Date(Date.now() + renewalDays * 24 * 60 * 60 * 1000);
           db.run('UPDATE bot_configs SET expires_at = ? WHERE id = ?', [newExpiryDate.toISOString(), bot.id]);
           
           if (!user.is_admin) {
-            db.run('UPDATE users SET credits = credits - 100 WHERE id = ?', [user.id]);
+            db.run('UPDATE users SET credits = credits - ? WHERE id = ?', [renewalCost, user.id]);
             db.run(
               'INSERT INTO credit_transactions (user_id, amount, type, description) VALUES (?, ?, ?, ?)',
-              [user.id, -100, 'auto_renewal', `Auto-renewed bot: ${bot.user_name}`]
+              [user.id, -renewalCost, 'auto_renewal', `Auto-renewed bot: ${bot.user_name} (${bot.billing_plan})`]
             );
           }
           
-          console.log(`✅ Auto-renewed bot: ${bot.user_name}`);
+          console.log(`✅ Auto-renewed bot: ${bot.user_name} (${bot.billing_plan})`);
         } else {
           // Stop bot due to insufficient credits
           botManager.stopBot(bot.id);
