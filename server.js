@@ -1,11 +1,10 @@
 const express = require('express');
 const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
+const { db, admin } = require('./firebase-config');
 const BotManager = require('./BotManager');
 
 const app = express();
@@ -16,140 +15,63 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// Session configuration
+// Session configuration - using memory store (acceptable for Cloud Run)
 app.use(session({
-  store: new SQLiteStore({ db: 'sessions.db' }),
-  secret: 'otp-bot-secret-key-change-in-production',
+  secret: process.env.SESSION_SECRET || 'default-secret-change-in-production',
   resave: false,
   saveUninitialized: false,
   cookie: { 
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    httpOnly: true
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production'
   }
 }));
 
-// Initialize SQLite Database
-const db = new sqlite3.Database('./bots.db', (err) => {
-  if (err) {
-    console.error('❌ Database connection error:', err);
-  } else {
-    console.log('✅ Connected to SQLite database');
-    initializeDatabase();
-  }
-});
-
-// Initialize database tables
-function initializeDatabase() {
-  // Users table
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      username TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      credits INTEGER DEFAULT 0,
-      is_approved INTEGER DEFAULT 0,
-      is_admin INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `, (err) => {
-    if (err) {
-      console.error('❌ Error creating users table:', err);
-    } else {
-      console.log('✅ Users table initialized');
-      // Create admin account if not exists
-      createAdminAccount();
-    }
-  });
-
-  // Bot configs table with billing_plan
-  db.run(`
-    CREATE TABLE IF NOT EXISTS bot_configs (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      user_name TEXT NOT NULL,
-      panel_username TEXT NOT NULL,
-      panel_password TEXT NOT NULL,
-      login_url TEXT NOT NULL DEFAULT 'http://139.99.63.204/ints/login',
-      sms_reports_url TEXT NOT NULL DEFAULT 'http://139.99.63.204/ints/agent/SMSCDRReports',
-      telegram_bot_token TEXT NOT NULL,
-      telegram_chat_ids TEXT NOT NULL,
-      poll_interval INTEGER DEFAULT 30000,
-      status TEXT DEFAULT 'stopped',
-      billing_plan TEXT DEFAULT 'weekly',
-      expires_at DATETIME,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )
-  `);
-
-  // Bot logs table
-  db.run(`
-    CREATE TABLE IF NOT EXISTS bot_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      bot_id TEXT NOT NULL,
-      log_type TEXT NOT NULL,
-      message TEXT NOT NULL,
-      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (bot_id) REFERENCES bot_configs(id) ON DELETE CASCADE
-    )
-  `);
-
-  // Credit transactions table
-  db.run(`
-    CREATE TABLE IF NOT EXISTS credit_transactions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id TEXT NOT NULL,
-      amount INTEGER NOT NULL,
-      type TEXT NOT NULL,
-      description TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )
-  `);
-
-  // System settings table for maintenance mode
-  db.run(`
-    CREATE TABLE IF NOT EXISTS system_settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `, (err) => {
-    if (!err) {
-      // Initialize maintenance mode setting
-      db.run(
-        'INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)',
-        ['maintenance_mode', 'false']
-      );
-    }
-  });
-}
-
-async function createAdminAccount() {
-  const adminUsername = 'idledev';
-  const adminPassword = '200715';
-  
-  db.get('SELECT * FROM users WHERE username = ?', [adminUsername], async (err, user) => {
-    if (!user) {
-      const hashedPassword = await bcrypt.hash(adminPassword, 10);
+// Initialize Firebase collections
+async function initializeDatabase() {
+  try {
+    // Check if admin user exists
+    const usersRef = db.collection('users');
+    const adminQuery = await usersRef.where('username', '==', 'idledev').limit(1).get();
+    
+    if (adminQuery.empty) {
+      const hashedPassword = await bcrypt.hash('200715', 10);
       const adminId = crypto.randomBytes(16).toString('hex');
       
-      db.run(
-        'INSERT INTO users (id, username, password, credits, is_approved, is_admin) VALUES (?, ?, ?, ?, ?, ?)',
-        [adminId, adminUsername, hashedPassword, 999999, 1, 1],
-        (err) => {
-          if (!err) {
-            console.log('✅ Admin account created: username=idledev, password=200715');
-          }
-        }
-      );
+      await usersRef.doc(adminId).set({
+        id: adminId,
+        username: 'idledev',
+        password: hashedPassword,
+        credits: 999999,
+        is_approved: true,
+        is_admin: true,
+        created_at: new Date(),
+        updated_at: new Date()
+      });
+      
+      console.log('✅ Admin account created: username=idledev, password=200715');
     }
-  });
+    
+    // Initialize system settings
+    const settingsRef = db.collection('system_settings');
+    const maintenanceDoc = await settingsRef.doc('maintenance_mode').get();
+    if (!maintenanceDoc.exists) {
+      await settingsRef.doc('maintenance_mode').set({
+        key: 'maintenance_mode',
+        value: 'false',
+        updated_at: new Date()
+      });
+    }
+    
+    console.log('✅ Connected to Firebase Firestore');
+  } catch (err) {
+    console.error('❌ Database initialization error:', err);
+  }
 }
 
-// Bot Manager Instance
+initializeDatabase();
+
+// Bot Manager Instance - pass db to BotManager
 const botManager = new BotManager(db);
 
 // Middleware to check authentication
@@ -183,26 +105,31 @@ app.post('/api/auth/register', async (req, res) => {
   }
 
   try {
+    const usersRef = db.collection('users');
+    const existingUser = await usersRef.where('username', '==', username).limit(1).get();
+    
+    if (!existingUser.empty) {
+      return res.status(400).json({ error: 'Username already exists' });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const userId = crypto.randomBytes(16).toString('hex');
 
-    db.run(
-      'INSERT INTO users (id, username, password, credits, is_approved) VALUES (?, ?, ?, ?, ?)',
-      [userId, username, hashedPassword, 0, 0],
-      function(err) {
-        if (err) {
-          if (err.message.includes('UNIQUE')) {
-            return res.status(400).json({ error: 'Username already exists' });
-          }
-          return res.status(500).json({ error: err.message });
-        }
+    await usersRef.doc(userId).set({
+      id: userId,
+      username,
+      password: hashedPassword,
+      credits: 0,
+      is_approved: false,
+      is_admin: false,
+      created_at: new Date(),
+      updated_at: new Date()
+    });
 
-        res.json({
-          message: 'Registration successful! Please wait for admin approval.',
-          userId
-        });
-      }
-    );
+    res.json({
+      message: 'Registration successful! Please wait for admin approval.',
+      userId
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -216,14 +143,16 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(400).json({ error: 'Username and password required' });
   }
 
-  db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-
-    if (!user) {
+  try {
+    const usersRef = db.collection('users');
+    const userQuery = await usersRef.where('username', '==', username).limit(1).get();
+    
+    if (userQuery.empty) {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
+
+    const userDoc = userQuery.docs[0];
+    const user = userDoc.data();
 
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
@@ -232,8 +161,8 @@ app.post('/api/auth/login', async (req, res) => {
 
     req.session.userId = user.id;
     req.session.username = user.username;
-    req.session.isAdmin = user.is_admin === 1;
-    req.session.isApproved = user.is_approved === 1;
+    req.session.isAdmin = user.is_admin;
+    req.session.isApproved = user.is_approved;
 
     res.json({
       message: 'Login successful',
@@ -241,11 +170,13 @@ app.post('/api/auth/login', async (req, res) => {
         id: user.id,
         username: user.username,
         credits: user.credits,
-        isApproved: user.is_approved === 1,
-        isAdmin: user.is_admin === 1
+        isApproved: user.is_approved,
+        isAdmin: user.is_admin
       }
     });
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Logout
@@ -255,64 +186,84 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 // Get current user
-app.get('/api/auth/me', requireAuth, (req, res) => {
-  db.get('SELECT id, username, credits, is_approved, is_admin FROM users WHERE id = ?', 
-    [req.session.userId], 
-    (err, user) => {
-      if (err || !user) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-
-      res.json({
-        id: user.id,
-        username: user.username,
-        credits: user.credits,
-        isApproved: user.is_approved === 1,
-        isAdmin: user.is_admin === 1
-      });
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+  try {
+    const userDoc = await db.collection('users').doc(req.session.userId).get();
+    
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found' });
     }
-  );
+
+    const user = userDoc.data();
+    res.json({
+      id: user.id,
+      username: user.username,
+      credits: user.credits,
+      isApproved: user.is_approved,
+      isAdmin: user.is_admin
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ADMIN ROUTES
 
 // Get all users (admin only)
-app.get('/api/admin/users', requireAdmin, (req, res) => {
-  db.all('SELECT id, username, credits, is_approved, is_admin, created_at FROM users ORDER BY created_at DESC', 
-    [], 
-    (err, users) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
-      res.json(users);
-    }
-  );
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+  try {
+    const usersSnapshot = await db.collection('users')
+      .orderBy('created_at', 'desc')
+      .get();
+    
+    const users = usersSnapshot.docs.map(doc => {
+      const user = doc.data();
+      return {
+        id: user.id,
+        username: user.username,
+        credits: user.credits,
+        is_approved: user.is_approved,
+        is_admin: user.is_admin,
+        created_at: user.created_at
+      };
+    });
+
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Approve user (admin only)
-app.post('/api/admin/users/:userId/approve', requireAdmin, (req, res) => {
+app.post('/api/admin/users/:userId/approve', requireAdmin, async (req, res) => {
   const { userId } = req.params;
 
-  db.run('UPDATE users SET is_approved = 1, credits = credits + 100 WHERE id = ?', 
-    [userId], 
-    function(err) {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
+  try {
+    const userRef = db.collection('users').doc(userId);
+    
+    await userRef.update({
+      is_approved: true,
+      credits: admin.firestore.FieldValue.increment(100),
+      updated_at: new Date()
+    });
 
-      // Log credit transaction
-      db.run(
-        'INSERT INTO credit_transactions (user_id, amount, type, description) VALUES (?, ?, ?, ?)',
-        [userId, 100, 'admin_grant', 'Account approval bonus']
-      );
+    // Log transaction
+    await db.collection('credit_transactions').add({
+      user_id: userId,
+      amount: 100,
+      type: 'admin_grant',
+      description: 'Account approval bonus',
+      created_at: new Date()
+    });
 
-      res.json({ message: 'User approved and 100 credits granted' });
-    }
-  );
+    res.json({ message: 'User approved and 100 credits granted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Gift credits (admin only)
-app.post('/api/admin/users/:userId/gift-credits', requireAdmin, (req, res) => {
+app.post('/api/admin/users/:userId/gift-credits', requireAdmin, async (req, res) => {
   const { userId } = req.params;
   const { amount } = req.body;
 
@@ -320,131 +271,139 @@ app.post('/api/admin/users/:userId/gift-credits', requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'Invalid amount' });
   }
 
-  db.run('UPDATE users SET credits = credits + ? WHERE id = ?', 
-    [amount, userId], 
-    function(err) {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
+  try {
+    const userRef = db.collection('users').doc(userId);
+    
+    await userRef.update({
+      credits: admin.firestore.FieldValue.increment(amount),
+      updated_at: new Date()
+    });
 
-      // Log credit transaction
-      db.run(
-        'INSERT INTO credit_transactions (user_id, amount, type, description) VALUES (?, ?, ?, ?)',
-        [userId, amount, 'admin_grant', `Admin gifted ${amount} credits`]
-      );
+    // Log transaction
+    await db.collection('credit_transactions').add({
+      user_id: userId,
+      amount: amount,
+      type: 'admin_grant',
+      description: `Admin gifted ${amount} credits`,
+      created_at: new Date()
+    });
 
-      res.json({ message: `${amount} credits gifted successfully` });
-    }
-  );
+    res.json({ message: `${amount} credits gifted successfully` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Get admin stats
-app.get('/api/admin/stats', requireAdmin, (req, res) => {
-  const stats = {};
+app.get('/api/admin/stats', requireAdmin, async (req, res) => {
+  try {
+    const usersSnapshot = await db.collection('users').get();
+    const botsSnapshot = await db.collection('bot_configs').get();
+    
+    const totalUsers = usersSnapshot.size;
+    const pendingApprovals = usersSnapshot.docs.filter(doc => !doc.data().is_approved).length;
+    const totalBots = botsSnapshot.size;
+    const activeBots = botsSnapshot.docs.filter(doc => doc.data().status === 'running').length;
 
-  db.get('SELECT COUNT(*) as total FROM users', [], (err, result) => {
-    stats.totalUsers = result ? result.total : 0;
-
-    db.get('SELECT COUNT(*) as total FROM users WHERE is_approved = 0', [], (err, result) => {
-      stats.pendingApprovals = result ? result.total : 0;
-
-      db.get('SELECT COUNT(*) as total FROM bot_configs', [], (err, result) => {
-        stats.totalBots = result ? result.total : 0;
-
-        db.get('SELECT COUNT(*) as total FROM bot_configs WHERE status = "running"', [], (err, result) => {
-          stats.activeBots = result ? result.total : 0;
-
-          res.json(stats);
-        });
-      });
+    res.json({
+      totalUsers,
+      pendingApprovals,
+      totalBots,
+      activeBots
     });
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Maintenance mode endpoints
-app.get('/api/admin/maintenance', requireAdmin, (req, res) => {
-  db.get('SELECT value FROM system_settings WHERE key = ?', ['maintenance_mode'], (err, row) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json({ maintenanceMode: row ? row.value === 'true' : false });
-  });
+app.get('/api/admin/maintenance', requireAdmin, async (req, res) => {
+  try {
+    const maintenanceDoc = await db.collection('system_settings').doc('maintenance_mode').get();
+    const isEnabled = maintenanceDoc.exists ? maintenanceDoc.data().value === 'true' : false;
+    
+    res.json({ maintenanceMode: isEnabled });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/admin/maintenance/toggle', requireAdmin, async (req, res) => {
   const { enabled } = req.body;
   
   try {
-    // Update maintenance mode setting
-    db.run(
-      'UPDATE system_settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?',
-      [enabled ? 'true' : 'false', 'maintenance_mode'],
-      async (err) => {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
+    await db.collection('system_settings').doc('maintenance_mode').set({
+      key: 'maintenance_mode',
+      value: enabled ? 'true' : 'false',
+      updated_at: new Date()
+    });
 
-        // Notify bot manager about maintenance mode change
-        if (enabled) {
-          await botManager.enableMaintenanceMode();
-        } else {
-          await botManager.disableMaintenanceMode();
-        }
+    if (enabled) {
+      await botManager.enableMaintenanceMode();
+    } else {
+      await botManager.disableMaintenanceMode();
+    }
 
-        res.json({ 
-          message: `Maintenance mode ${enabled ? 'enabled' : 'disabled'}`,
-          maintenanceMode: enabled 
-        });
-      }
-    );
+    res.json({ 
+      message: `Maintenance mode ${enabled ? 'enabled' : 'disabled'}`,
+      maintenanceMode: enabled 
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Get maintenance status (public endpoint for users to check)
-app.get('/api/maintenance-status', (req, res) => {
-  db.get('SELECT value FROM system_settings WHERE key = ?', ['maintenance_mode'], (err, row) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json({ maintenanceMode: row ? row.value === 'true' : false });
-  });
+// Get maintenance status (public endpoint)
+app.get('/api/maintenance-status', async (req, res) => {
+  try {
+    const maintenanceDoc = await db.collection('system_settings').doc('maintenance_mode').get();
+    const isEnabled = maintenanceDoc.exists ? maintenanceDoc.data().value === 'true' : false;
+    
+    res.json({ maintenanceMode: isEnabled });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // BOT ROUTES (Protected)
 
 // Get user's bots
-app.get('/api/bots', requireAuth, (req, res) => {
-  const userId = req.session.isAdmin ? null : req.session.userId;
-  const query = userId 
-    ? 'SELECT * FROM bot_configs WHERE user_id = ? ORDER BY created_at DESC'
-    : 'SELECT * FROM bot_configs ORDER BY created_at DESC';
-  const params = userId ? [userId] : [];
-
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
+app.get('/api/bots', requireAuth, async (req, res) => {
+  try {
+    let query = db.collection('bot_configs');
+    
+    if (!req.session.isAdmin) {
+      query = query.where('user_id', '==', req.session.userId);
     }
     
-    const bots = rows.map(bot => ({
-      ...bot,
-      telegram_chat_ids: JSON.parse(bot.telegram_chat_ids),
-      panel_password: '••••••••',
-      telegram_bot_token: bot.telegram_bot_token.substring(0, 10) + '...'
-    }));
+    const botsSnapshot = await query.orderBy('created_at', 'desc').get();
+    
+    const bots = botsSnapshot.docs.map(doc => {
+      const bot = doc.data();
+      return {
+        ...bot,
+        telegram_chat_ids: Array.isArray(bot.telegram_chat_ids) ? bot.telegram_chat_ids : [],
+        panel_password: '••••••••',
+        telegram_bot_token: bot.telegram_bot_token.substring(0, 10) + '...'
+      };
+    });
     
     res.json(bots);
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Create new bot
-app.post('/api/bots', requireAuth, (req, res) => {
-  db.get('SELECT * FROM users WHERE id = ?', [req.session.userId], async (err, user) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
+app.post('/api/bots', requireAuth, async (req, res) => {
+  try {
+    const userDoc = await db.collection('users').doc(req.session.userId).get();
+    
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
+    const user = userDoc.data();
     if (!user.is_approved && !user.is_admin) {
       return res.status(403).json({ error: 'Account not approved yet' });
     }
@@ -458,7 +417,6 @@ app.post('/api/bots', requireAuth, (req, res) => {
       billing_plan
     } = req.body;
 
-    // Validate billing plan and calculate cost
     const validPlans = { weekly: 100, monthly: 400 };
     const plan = billing_plan || 'weekly';
     const cost = validPlans[plan];
@@ -477,224 +435,175 @@ app.post('/api/bots', requireAuth, (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const id = crypto.randomBytes(16).toString('hex');
-    const chatIdsJson = JSON.stringify(telegram_chat_ids);
-    
-    // Calculate expiry based on billing plan
+    const botId = crypto.randomBytes(16).toString('hex');
     const expiryDays = plan === 'monthly' ? 30 : 7;
     const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
 
-    const query = `
-      INSERT INTO bot_configs (
-        id, user_id, user_name, panel_username, panel_password, 
-        telegram_bot_token, telegram_chat_ids, billing_plan, expires_at, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'stopped')
-    `;
+    await db.collection('bot_configs').doc(botId).set({
+      id: botId,
+      user_id: req.session.userId,
+      user_name,
+      panel_username,
+      panel_password,
+      login_url: 'http://139.99.63.204/ints/login',
+      sms_reports_url: 'http://139.99.63.204/ints/agent/SMSCDRReports',
+      telegram_bot_token,
+      telegram_chat_ids: telegram_chat_ids,
+      poll_interval: 30000,
+      status: 'stopped',
+      billing_plan: plan,
+      expires_at: expiresAt,
+      created_at: new Date(),
+      updated_at: new Date()
+    });
 
-    db.run(
-      query,
-      [id, req.session.userId, user_name, panel_username, panel_password, telegram_bot_token, chatIdsJson, plan, expiresAt.toISOString()],
-      function(err) {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
-
-        // Deduct credits (if not admin)
-        if (!user.is_admin) {
-          db.run('UPDATE users SET credits = credits - ? WHERE id = ?', [cost, req.session.userId]);
-          
-          // Log transaction
-          db.run(
-            'INSERT INTO credit_transactions (user_id, amount, type, description) VALUES (?, ?, ?, ?)',
-            [req.session.userId, -cost, 'bot_creation', `Created bot: ${user_name} (${plan})`]
-          );
-        }
-        
-        res.json({
-          id,
-          message: `Bot created successfully (${plan} plan)`,
-          user_name,
-          billing_plan: plan,
-          cost,
-          expiresAt: expiresAt.toISOString()
-        });
-      }
-    );
-  });
-});
-
-// Start bot
-app.post('/api/bots/:id/start', requireAuth, async (req, res) => {
-  try {
-    // Check bot ownership
-    db.get('SELECT * FROM bot_configs WHERE id = ?', [req.params.id], async (err, bot) => {
-      if (err || !bot) {
-        return res.status(404).json({ error: 'Bot not found' });
-      }
-
-      if (bot.user_id !== req.session.userId && !req.session.isAdmin) {
-        return res.status(403).json({ error: 'Not authorized' });
-      }
-
-      const result = await botManager.startBot(req.params.id);
+    // Deduct credits (if not admin)
+    if (!user.is_admin) {
+      await db.collection('users').doc(req.session.userId).update({
+        credits: admin.firestore.FieldValue.increment(-cost)
+      });
       
-      if (result.success) {
-        db.run('UPDATE bot_configs SET status = ? WHERE id = ?', ['running', req.params.id]);
-        res.json({ message: 'Bot started successfully' });
-      } else {
-        res.status(500).json({ error: result.error });
-      }
+      // Log transaction
+      await db.collection('credit_transactions').add({
+        user_id: req.session.userId,
+        amount: -cost,
+        type: 'bot_creation',
+        description: `Created bot: ${user_name} (${plan})`,
+        created_at: new Date()
+      });
+    }
+    
+    res.json({
+      id: botId,
+      message: `Bot created successfully (${plan} plan)`,
+      user_name,
+      billing_plan: plan,
+      cost,
+      expiresAt: expiresAt.toISOString()
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Stop bot
-app.post('/api/bots/:id/stop', requireAuth, (req, res) => {
-  db.get('SELECT * FROM bot_configs WHERE id = ?', [req.params.id], (err, bot) => {
-    if (err || !bot) {
+// Get single bot
+app.get('/api/bots/:botId', requireAuth, async (req, res) => {
+  try {
+    const botDoc = await db.collection('bot_configs').doc(req.params.botId).get();
+    
+    if (!botDoc.exists) {
       return res.status(404).json({ error: 'Bot not found' });
     }
 
+    const bot = botDoc.data();
+    
+    // Check authorization
     if (bot.user_id !== req.session.userId && !req.session.isAdmin) {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    botManager.stopBot(req.params.id);
-    db.run('UPDATE bot_configs SET status = ? WHERE id = ?', ['stopped', req.params.id]);
-    res.json({ message: 'Bot stopped successfully' });
-  });
+    res.json({
+      ...bot,
+      telegram_chat_ids: Array.isArray(bot.telegram_chat_ids) ? bot.telegram_chat_ids : [],
+      panel_password: '••••••••',
+      telegram_bot_token: bot.telegram_bot_token.substring(0, 10) + '...'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Delete bot
-app.delete('/api/bots/:id', requireAuth, (req, res) => {
-  db.get('SELECT * FROM bot_configs WHERE id = ?', [req.params.id], (err, bot) => {
-    if (err || !bot) {
+// Start bot
+app.post('/api/bots/:botId/start', requireAuth, async (req, res) => {
+  try {
+    const botDoc = await db.collection('bot_configs').doc(req.params.botId).get();
+    
+    if (!botDoc.exists) {
       return res.status(404).json({ error: 'Bot not found' });
     }
 
+    const bot = botDoc.data();
+    
     if (bot.user_id !== req.session.userId && !req.session.isAdmin) {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    if (botManager.isRunning(req.params.id)) {
-      botManager.stopBot(req.params.id);
+    const result = await botManager.startBot(req.params.botId);
+    
+    if (result.success) {
+      await db.collection('bot_configs').doc(req.params.botId).update({
+        status: 'running',
+        updated_at: new Date()
+      });
+      res.json({ message: 'Bot started successfully' });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Stop bot
+app.post('/api/bots/:botId/stop', requireAuth, async (req, res) => {
+  try {
+    const botDoc = await db.collection('bot_configs').doc(req.params.botId).get();
+    
+    if (!botDoc.exists) {
+      return res.status(404).json({ error: 'Bot not found' });
     }
 
-    db.run('DELETE FROM bot_configs WHERE id = ?', [req.params.id], function(err) {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
-      res.json({ message: 'Bot deleted successfully' });
-    });
-  });
+    const bot = botDoc.data();
+    
+    if (bot.user_id !== req.session.userId && !req.session.isAdmin) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    const result = await botManager.stopBot(req.params.botId);
+    
+    if (result.success) {
+      await db.collection('bot_configs').doc(req.params.botId).update({
+        status: 'stopped',
+        updated_at: new Date()
+      });
+      res.json({ message: 'Bot stopped successfully' });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Get bot logs
-app.get('/api/bots/:id/logs', requireAuth, (req, res) => {
-  const limit = parseInt(req.query.limit) || 50;
-  
-  db.all(
-    'SELECT * FROM bot_logs WHERE bot_id = ? ORDER BY timestamp DESC LIMIT ?',
-    [req.params.id, limit],
-    (err, rows) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
-      res.json(rows);
+app.get('/api/bots/:botId/logs', requireAuth, async (req, res) => {
+  try {
+    const botDoc = await db.collection('bot_configs').doc(req.params.botId).get();
+    
+    if (!botDoc.exists) {
+      return res.status(404).json({ error: 'Bot not found' });
     }
-  );
-});
 
-// Health check
-app.get('/health', (req, res) => {
-  const runningBots = botManager.getRunningBotsCount();
-  
-  db.get('SELECT value FROM system_settings WHERE key = ?', ['maintenance_mode'], (err, row) => {
-    res.json({
-      status: 'ok',
-      uptime: process.uptime(),
-      runningBots,
-      maintenanceMode: row ? row.value === 'true' : false,
-      timestamp: new Date().toISOString()
-    });
-  });
-});
-
-// Serve frontend
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Auto-renewal checker (runs every hour)
-setInterval(() => {
-  db.all('SELECT * FROM bot_configs WHERE status = "running" AND expires_at <= datetime("now")', [], (err, bots) => {
-    if (err || !bots) return;
-
-    bots.forEach(bot => {
-      db.get('SELECT * FROM users WHERE id = ?', [bot.user_id], (err, user) => {
-        if (err || !user) return;
-
-        // Calculate renewal cost based on billing plan
-        const renewalCost = bot.billing_plan === 'monthly' ? 400 : 100;
-        const renewalDays = bot.billing_plan === 'monthly' ? 30 : 7;
-
-        if (user.is_admin || user.credits >= renewalCost) {
-          // Renew bot
-          const newExpiryDate = new Date(Date.now() + renewalDays * 24 * 60 * 60 * 1000);
-          db.run('UPDATE bot_configs SET expires_at = ? WHERE id = ?', [newExpiryDate.toISOString(), bot.id]);
-          
-          if (!user.is_admin) {
-            db.run('UPDATE users SET credits = credits - ? WHERE id = ?', [renewalCost, user.id]);
-            db.run(
-              'INSERT INTO credit_transactions (user_id, amount, type, description) VALUES (?, ?, ?, ?)',
-              [user.id, -renewalCost, 'auto_renewal', `Auto-renewed bot: ${bot.user_name} (${bot.billing_plan})`]
-            );
-          }
-          
-          console.log(`✅ Auto-renewed bot: ${bot.user_name} (${bot.billing_plan})`);
-        } else {
-          // Stop bot due to insufficient credits
-          botManager.stopBot(bot.id);
-          db.run('UPDATE bot_configs SET status = ? WHERE id = ?', ['stopped', bot.id]);
-          console.log(`⏸️ Stopped bot due to insufficient credits: ${bot.user_name}`);
-        }
-      });
-    });
-  });
-}, 60 * 60 * 1000); // Check every hour
-
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`🚀 Multi-Tenant OTP Bot Server v2.0`);
-  console.log(`🌐 Server running on port ${PORT}`);
-  console.log(`👤 Admin: username=idledev, password=200715`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-  
-  // Auto-start bots that were running
-  db.all('SELECT id FROM bot_configs WHERE status = ?', ['running'], (err, rows) => {
-    if (!err && rows.length > 0) {
-      console.log(`🔄 Restarting ${rows.length} bot(s)...`);
-      rows.forEach(row => {
-        botManager.startBot(row.id);
-      });
+    const bot = botDoc.data();
+    
+    if (bot.user_id !== req.session.userId && !req.session.isAdmin) {
+      return res.status(403).json({ error: 'Not authorized' });
     }
-  });
+
+    const logsSnapshot = await db.collection('bot_logs')
+      .where('bot_id', '==', req.params.botId)
+      .orderBy('timestamp', 'desc')
+      .limit(100)
+      .get();
+
+    const logs = logsSnapshot.docs.map(doc => doc.data());
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('\n🛑 Shutting down server...');
-  await botManager.stopAllBots();
-  db.close();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  console.log('\n🛑 Shutting down server...');
-  await botManager.stopAllBots();
-  db.close();
-  process.exit(0);
+// Server startup
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
