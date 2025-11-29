@@ -268,7 +268,7 @@ Your bot is now actively monitoring for OTPs again. All systems operational! ðŸš
       await botInstance.page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
 
       // Login
-      await botInstance.page.goto(botInstance.config.login_url, { waitUntil: 'networkidle2', timeout: 30000 });
+      await botInstance.page.goto(botInstance.config.login_url, { waitUntil: 'networkidle2', timeout: 60000 });
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       const captchaAnswer = await this.solveMathCaptcha(botInstance.page);
@@ -343,7 +343,7 @@ Your bot is now actively monitoring for OTPs again. All systems operational! ðŸš
 
       await botInstance.page.goto(botInstance.config.sms_reports_url, { 
         waitUntil: 'networkidle2', 
-        timeout: 30000 
+        timeout: 60000 
       });
 
       let responseData = null;
