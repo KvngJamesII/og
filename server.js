@@ -376,7 +376,8 @@ app.get('/api/bots', requireAuth, async (req, res) => {
       query = query.where('user_id', '==', req.session.userId);
     }
     
-    const botsSnapshot = await query.orderBy('created_at', 'desc').get();
+    query = query.orderBy('created_at', 'desc');
+    const botsSnapshot = await query.get();
     
     const bots = botsSnapshot.docs.map(doc => {
       const bot = doc.data();
@@ -390,6 +391,7 @@ app.get('/api/bots', requireAuth, async (req, res) => {
     
     res.json(bots);
   } catch (err) {
+    console.error('❌ Error fetching bots:', err);
     res.status(500).json({ error: err.message });
   }
 });
